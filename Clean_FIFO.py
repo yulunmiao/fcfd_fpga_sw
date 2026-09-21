@@ -28,7 +28,7 @@ if __name__ == "__main__":
         kcu.hw.dispatch()
         time.sleep(1e-4) # avoid crash
         fifo_occupancy -= 255
-        
+    kcu.write_node("SYSTEM.CLEAR_UNLOCK",1)
     logging.info(
         f"FIFO cleaned, occupancy={kcu.read_node('SYSTEM.FIFO_OCCUPANCY')}, "
         f"empty={kcu.read_node('SYSTEM.FIFO_EMPTY')}"

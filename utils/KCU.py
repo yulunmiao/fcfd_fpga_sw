@@ -23,7 +23,7 @@ class KCU:
     """Connect to an FCFD FPGA and access nodes from ``fcfd_fw.xml``."""
     
     DEFAULT_ADDRESS_TABLE = (
-        Path(__file__).resolve().parent.parent
+        Path(__file__).resolve().parent.parent.parent
         / "fcfd_fw"
         / "address_tables"
         / "fcfd_fw.xml"
@@ -165,6 +165,13 @@ def main() -> int:
 
     try:
         kcu = KCU(uri, args.address_table, args.device_id, args.log_level)
+        available_nodes = set(kcu.hw.getNodes())
+
+        def node_exists(node: str) -> bool:
+            if node not in available_nodes:
+                logging.warning("Node does not exist: %s", node)
+                return False
+            return True
 
         if args.interactive:
             logging.info("Running in interactive mode")
@@ -189,6 +196,8 @@ def main() -> int:
                             continue
                         else:
                             for node in node.split():
+                                if not node_exists(node):
+                                    continue
                                 value = kcu.read_node(node, dispatch=True)
                                 logging.info(f"{node} = 0x{value:08x} ({value})")
                 elif mode == 'w':
@@ -198,6 +207,8 @@ def main() -> int:
                         if user_input == 'e':
                             break
                         node, value = user_input.split()
+                        if not node_exists(node):
+                            continue
                         kcu.write_node(node, int(value, 16), dispatch=True)
                         logging.info(f"{node} <= 0x{int(value, 16):08x}")
                 else:
@@ -208,8 +219,10 @@ def main() -> int:
             for node in kcu.hw.getNodes():
                 logging.info(node)
         if args.write:
-            kcu.write_node(args.write[0], int(args.write[1],16), dispatch=True)
-            logging.info(f"{args.write[0]} <= 0x{int(args.write[1],16):08x}")
+            node, value = args.write
+            if node_exists(node):
+                kcu.write_node(node, int(value,16), dispatch=True)
+                logging.info(f"{node} <= 0x{int(value,16):08x}")
         if args.read:
             if "all" in args.read:
                 for node in kcu.readable_nodes():
@@ -218,6 +231,8 @@ def main() -> int:
                     logging.info(f"{node} = 0x{value:08x} ({value})")
             else:
                 for node in args.read:
+                    if not node_exists(node):
+                        continue
                     value = kcu.read_node(node, dispatch=True)
                     logging.info(f"{node} = 0x{value:08x} ({value})")
 

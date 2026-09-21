@@ -19,6 +19,7 @@ if __name__ == "__main__":
     kcu.write_node("SYSTEM.BLOCK_ACQ_MODE",1)
     kcu.write_node("SYSTEM.DESCRAMBLE_ENABLE",0)
     kcu.write_node("SYSTEM.DROP_FILLER",1)
+    kcu.write_node("SYSTEM.CLEAR_UNLOCK",1)
     #kcu.write_node("SYSTEM.FCFD_DATA_MODE",0)
     fifo = kcu.hw.getNode("DAQ.FIFO")
     fifo_occupancy = kcu.read_node("SYSTEM.FIFO_OCCUPANCY")
