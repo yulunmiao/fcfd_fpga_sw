@@ -1,3 +1,8 @@
+from pathlib import Path
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
 import utils.KCU as KCU
 import matplotlib.pyplot as plt
 import time
@@ -14,47 +19,57 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     kcu = KCU.KCU(uhal_level="ERROR")
     test_result = {}
-    kcu.write_node("SYSTEM.ETHERNET_TEST_MODE",0)
+
+    # Use block acquisition
     kcu.write_node("SYSTEM.BLOCK_ACQ_MODE",1)
     kcu.write_node("SYSTEM.DESCRAMBLE_ENABLE",1)
 
     fifo = kcu.hw.getNode("DAQ.FIFO")
-
-    kcu.write_node("SYSTEM.FCFD_DATA_MODE",2)
-    input(f"Please set test_pattern_sel to 2.\nPress Enter to continue...") 
+    # Clean FIFO entirely before test
+    logging.info("Clear FIFO before test")
+    fifo_occupancy = kcu.read_node("SYSTEM.FIFO_OCCUPANCY")
+    while fifo_occupancy>0:
+        fifo.readBlock(min(255, fifo_occupancy))
+        kcu.hw.dispatch()
+        time.sleep(1e-4) # avoid crash
+        fifo_occupancy -= 255
+        
     logging.info(
-        f"FIFO occupancy = {kcu.read_node('SYSTEM.FIFO_OCCUPANCY')}, "
+        f"FIFO cleaned, occupancy={kcu.read_node('SYSTEM.FIFO_OCCUPANCY')}, "
         f"empty={kcu.read_node('SYSTEM.FIFO_EMPTY')}"
     )
-    kcu.write_node("SYSTEM.BLOCK_ACQ_START",1)
-    input()
-    
-    fifo_occupancy = kcu.read_node("SYSTEM.FIFO_OCCUPANCY")
-    fifo = kcu.hw.getNode("DAQ.FIFO")
 
-    # for i in tqdm(range(fifo_occupancy)):
-    is_First = True
+    # Fixed Pattern test
+    kcu.write_node("SYSTEM.ETHERNET_TEST_MODE",0)
+    kcu.write_node("SYSTEM.FCFD_DATA_MODE",2)
+    input(f"Please set test_pattern_sel to 2.\nPress Enter to continue...") 
+
+    logging.info(f"Start fixed pattern test")
+    kcu.write_node("SYSTEM.BLOCK_ACQ_START",1)
+    time.sleep(2)
+    if kcu.read_node("SYSTEM.FIFO_FULL")!=1:
+        logging.warning("The FIFO is not filled in fixed pattern test.")
+    # N.B. there is a know problem that the first 5 words can become from previous setting, skip them.
+    # _ = fifo.readBlock(5)
+    fifo_occupancy = kcu.read_node("SYSTEM.FIFO_OCCUPANCY")
     while fifo_occupancy>0:
         try:
-            fifo_output = fifo.readBlock(min(127, fifo_occupancy))
+            fifo_output = fifo.readBlock(min(255, fifo_occupancy))
             kcu.hw.dispatch()
 
-            if is_First:
-                reference = list(fifo_output).copy()
-                is_First = False
-
-            print(fifo_output)
-            for i,(e,o) in enumerate(zip(reference,fifo_output)):
-                print(i,e,o,e==o)
-            if reference != list(fifo_output):
-                print('break')
+            condition = all([o ==0x5c5c5c5c  for o in fifo_output])
+            if not condition:
+                print("Alea iacta ")
+                logging.warning(f"Mismatch found")
+                logging.warning(f"expecting\treading\tdiff")
+                [logging.warning(f"{0x5c5c5c5c}\t{o}\t{o-e}") for o in fifo_output]
                 break
-            fifo_occupancy-=127
+            fifo_occupancy-=255
         except (uhal.UdpTimeout):
             time.sleep(0.1)
             continue 
-    # else:
-    #     logging.info("Ethernet_test_mode finished with no error")
+    else:
+        logging.info("Fixed pattern test finished with no error")
     logging.info(
         f"FIFO occupancy = {kcu.read_node('SYSTEM.FIFO_OCCUPANCY')}, "
         f"empty={kcu.read_node('SYSTEM.FIFO_EMPTY')}"

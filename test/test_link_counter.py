@@ -1,3 +1,9 @@
+from pathlib import Path
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+
 import utils.KCU as KCU
 import matplotlib.pyplot as plt
 import time
@@ -35,6 +41,7 @@ if __name__ == "__main__":
     )
 
     # bit counter test
+    kcu.write_node("SYSTEM.ETHERNET_TEST_MODE",0)
     kcu.write_node("SYSTEM.FCFD_DATA_MODE",3)
     input(f"Please set test_pattern_sel to 3.\nPress Enter to continue...") 
 
